@@ -1,6 +1,6 @@
 # betdice_contract
-EOSBETDI骰子游戏，合约代码
-author:区块链青年qq_776355102
+#EOSBETDI骰子游戏，合约代码
+#author:区块链青年qq_776355102
 
 合约授权
 cleos -u http://api-kylin.eoshenzhen.io:8890 set account permission baidudice222 active '{"threshold" : 1, "keys" : [{"key":"EOS5ihbMJSJ7GC3zxbJaKU1h571UEUxn81FLoJdPX7YaH5T2hVrdu","weight":1}], "accounts" : [{"permission":{"actor":"baidudice222","permission":"eosio.code"},"weight":1}]}' owner -p baidudice222@owner
