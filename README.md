@@ -1,5 +1,7 @@
 # betdice_contract
+
 #EOSBETDI骰子游戏，合约代码
+
 #author:区块链青年qq_776355102
 
 合约授权
