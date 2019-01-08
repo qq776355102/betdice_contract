@@ -21,10 +21,14 @@ using eosio::transaction;
 using eosio::time_point_sec;
 
 
-#define REVEALER N(fuckdice1234)
-#define REFUNDER N(zhaojixing12)
+#define REVEALER N(mc1234555555)  //开奖部署合约账户
+//#define REFUNDER N(jailebihaido)
+
+#define  REFERRALER  N(222222222222) //默认推荐人账户
+
+#define BONUSPOOL N(111111111111)  //接受玩家输了的金额0.5% eos 账户
+
 #define EOS_SYMBOL S(4, EOS)
-// #define BET_SYMBOL S(4, BET)
 
 class EOSBetDice : public eosio::contract {
 	public:
@@ -145,37 +149,41 @@ class EOSBetDice : public eosio::contract {
 									  .to = to,
 									  .quantity = quantity,
 									  .memo = memo};
+									  
+			const std::size_t first_break = memo.find("-");
 
 
-			eosio_assert( transfer_data.quantity.is_valid(), "Invalid asset");
+			if(first_break != std::string::npos){
+				eosio_assert( transfer_data.quantity.is_valid(), "Invalid asset");
 
-			const uint64_t your_bet_amount = (uint64_t)transfer_data.quantity.amount;
-			eosio_assert(MINBET <= your_bet_amount, "Must bet greater than min");
+				const uint64_t your_bet_amount = (uint64_t)transfer_data.quantity.amount;
+				eosio_assert(MINBET <= your_bet_amount, "Must bet greater than min");
 
-			increment_liabilities_bet_id(your_bet_amount);
+				increment_liabilities_bet_id(your_bet_amount);
 
-			uint8_t roll_under;
-    		checksum256 house_seed_hash;
-    		checksum256 user_seed_hash;
-    		account_name referral = N(starrystarry);
-			uint64_t house_edge = HOUSEEDGE_times10000;
+				uint8_t roll_under;
+				checksum256 house_seed_hash;
+				checksum256 user_seed_hash;
+				account_name referral = REFERRALER;
+				uint64_t house_edge = HOUSEEDGE_times10000;
 
-    		parse_memo(memo, &roll_under, &house_seed_hash, &user_seed_hash, &referral);
-			eosio_assert( roll_under >= 2 && roll_under <= 96, "Roll must be >= 2, <= 96.");
+				parse_memo(memo, &roll_under, &house_seed_hash, &user_seed_hash, &referral);
+				eosio_assert( roll_under >= 2 && roll_under <= 96, "Roll must be >= 2, <= 96.");
 
-			const uint64_t your_win_amount = (your_bet_amount * get_payout_mult_times10000(roll_under, house_edge) / 10000) - your_bet_amount;
-			eosio_assert(your_win_amount <= get_max_win(), "Bet less than max");
+				const uint64_t your_win_amount = (your_bet_amount * get_payout_mult_times10000(roll_under, house_edge) / 10000) - your_bet_amount;
+				eosio_assert(your_win_amount <= get_max_win(), "Bet less than max");
 
-			activebets.emplace(_self, [&](auto& bet){
-				bet.id = next_id();
-				bet.bettor = transfer_data.from;
-				bet.referral = referral;
-				bet.bet_amt = your_bet_amount;
-				bet.roll_under = roll_under;
-				bet.user_seed = user_seed_hash;
-				bet.house_seed_hash = house_seed_hash;
-				bet.bet_time = time_point_sec(now());
-			});
+				activebets.emplace(_self, [&](auto& bet){
+					bet.id = next_id();
+					bet.bettor = transfer_data.from;
+					bet.referral = referral;
+					bet.bet_amt = your_bet_amount;
+					bet.roll_under = roll_under;
+					bet.user_seed = user_seed_hash;
+					bet.house_seed_hash = house_seed_hash;
+					bet.bet_time = time_point_sec(now());
+				});
+			}
 		}
 
 		// @abi action
@@ -214,7 +222,19 @@ class EOSBetDice : public eosio::contract {
 						_self, 
 						activebets_itr->bettor, 
 						asset(payout, symbol_type(EOS_SYMBOL)), 
-						std::string("Bet id: ") + std::to_string(bet_id) + std::string(" -- Winner! Play: playdice.io, roll number: " + std::to_string(random_roll) )
+						std::string("Bet id: ") + std::to_string(bet_id) + std::string(" -- Winner! Play: dice.io, roll number: " + std::to_string(random_roll) )
+					)
+				).send();
+			}else{
+				action(
+					permission_level{_self, N(active)},
+					N(eosio.token), 
+					N(transfer),
+					std::make_tuple(
+						_self, 
+						BONUSPOOL, 
+						asset((activebets_itr->bet_amt*5)/1000, symbol_type(EOS_SYMBOL)), 
+						""
 					)
 				).send();
 			}
