@@ -115,9 +115,11 @@ class sicbo : public eosio::contract {
 		//int num3 = (int)(source.hash[12] + source.hash[13] + source.hash[14] + source.hash[15] + source.hash[16] + source.hash[17])%10000+1;
 		//logger_info("1th: ", num1, ", 2th: ", num2, ", 3th: ", num3)
 
-		uint32_t num1 = (source.hash[0] +  source.hash[1] + source.hash[2] +  source.hash[3] +  source.hash[4] +  source.hash[5]+   source.hash[6] + source.hash[7] +  source.hash[8] + source.hash[9]);
-		uint32_t num2 = (source.hash[10] + source.hash[11]+ source.hash[12] + source.hash[13] + source.hash[14] + source.hash[15] + source.hash[16] + source.hash[17]+ source.hash[18]+ source.hash[19]);
-		uint32_t num3 = (source.hash[20] + source.hash[21]+ source.hash[22] + source.hash[23] + source.hash[24] + source.hash[25] + source.hash[26] + source.hash[27]+ source.hash[28]+ source.hash[29]);
+		uint64_t num1 = ( source.hash[0]+  source.hash[1] + source.hash[2] +  source.hash[3] +  source.hash[4] +  source.hash[5]+   source.hash[6] + source.hash[7] +  source.hash[8] + source.hash[9]);
+		uint64_t num2 = (source.hash[10]+ source.hash[11]+ source.hash[12] + source.hash[13] + source.hash[14] + source.hash[15] + source.hash[16] + source.hash[17]+ source.hash[18]+ source.hash[19]);
+		uint64_t num3 = (source.hash[20]+ source.hash[21]+ source.hash[22] + source.hash[23] + source.hash[24] + source.hash[25] + source.hash[26] + source.hash[27]+ source.hash[28]+ source.hash[29]);
+
+		
 		// 修改游戏表
 		games.modify(game, 0, [&](auto& game2) {
 			game2.num1 = num1;
@@ -409,9 +411,9 @@ class sicbo : public eosio::contract {
         uint8_t game_state = 0; // 状态：0:进行中, 1:开奖中, 2:已结束
 		checksum256 source;// 开奖种子
         checksum256 commitment; // 随机数加密串
-        uint32_t num1 = 0; // 第1个骰子数字
-        uint32_t num2 = 0; // 第2个骰子数字
-        uint32_t num3 = 0; // 第3个骰子数字
+        uint64_t num1 = 0; // 第1个骰子数字
+        uint64_t num2 = 0; // 第2个骰子数字
+        uint64_t num3 = 0; // 第3个骰子数字
         eosio::time_point_sec create_time; // 创建时间
         eosio::time_point_sec update_time; // 更新时间
         uint64_t primary_key() const { return id; }
@@ -463,37 +465,59 @@ class sicbo : public eosio::contract {
 	tb_global 	_global;
 
     // 通过结果计算所有下注类型是否胜利
-    MAP_RESULT _getWinsMap(const uint32_t num1, const uint32_t num2, const uint32_t num3){
+    MAP_RESULT _getWinsMap(const uint64_t num1, const uint64_t num2, const uint64_t num3){
 		MAP_RESULT map;
-		uint32_t sum = num1 + num2 + num3;
+		//uint64_t sum = num1 + num2 + num3;
 
-		if (num1 == num2 && num1 == num3) {
-			map[num1 * 100] = true;
-		}
+		//if (num1 == num2 && num1 == num3) {
+		//	map[num1 * 100] = true;
+		//}
 
 		// 设置单骰
-		map[num1 * 100] = true;
-		map[num2 * 100] = true;
-		map[num3 * 100] = true;
+	//	map[num1 * 100] = true;
+	//	map[num2 * 100] = true;
+		//map[num3 * 100] = true;
+		
+		if(num1 != num2 && num1 !=num3 && num2 !=num3 ){
+			if(num1 > num3 && num1 < num2 ){
+				map[200] = true;
+				map[210] = true;
+			}else if(num1 > num2 && num1 < num3 ){
+				map[300] = true;
+				map[310] = true;
+			}else if(num2 > num1 && num2 <num3){
+				map[300] = true;
+				map[320] = true;
+			}else if(num2 < num1 && num2 > num3){
+				map[100] = true;
+				map[120] = true;
+			}else if(num3 > num1 && num3 < num2){
+				map[200] = true;
+				map[230] = true;
+			}else{
+				map[100] = true;
+				map[130] = true;
+			}
+		}
 
 		// 设置双骰子
-		uint64_t double_num = 0;
-		uint64_t another_num = 0;
-		if (num1 == num2) {
-			double_num = num1;
-			another_num = num3;
-		} else if (num2 == num3) {
-			double_num = num2;
-			another_num = num1;
-		} else if (num1 == num3) {
-			double_num = num1;
-			another_num = num2;
-		} 
+		//uint64_t double_num = 0;
+		//uint64_t another_num = 0;
+		//if (num1 == num2) {
+		//	double_num = num1;
+		//	another_num = num3;
+		//} else if (num2 == num3) {
+		//	double_num = num2;
+			//another_num = num1;
+		//} else if (num1 == num3) {
+		//	double_num = num1;
+		//	another_num = num2;
+		//} 
 
-		if (double_num > 0) {
-			map[double_num * 100 + another_num * 10] = true;
-			map[double_num * 100] = true;
-		}
+		//if (double_num > 0) {
+		//	map[double_num * 100 + another_num * 10] = true;
+		//	map[double_num * 100] = true;
+		//}
 
 		return map;
 	};
