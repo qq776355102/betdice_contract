@@ -22,6 +22,9 @@ using eosio::name;
 using eosio::symbol_type;
 
 #define DEBUG
+#define EOS_SYMBOL S(4, EOS)
+#define  REFERRALER  N(pppppppp1235) //默认推荐人账户
+#define REVEALER N(3zhiwoniu121)  //开奖部署合约账户
 typedef std::map<int, bool> MAP_RESULT;
 typedef std::map<int, asset> BET_RESULT;
 
@@ -51,12 +54,29 @@ enum enum_offer_type {
 
 class sicbo : public eosio::contract {
   public:
+  
+	const uint64_t HOUSEEDGE_REF_times10000 = 150;
+	const uint64_t REFERRER_REWARD_times10000 = 50;
     sicbo(account_name self):eosio::contract(self),
        offers(_self, _self),
        games(_self, _self),
 	   _global(_self, _self)
     {}
 
+	
+	
+	struct st_result{
+			uint64_t 		game_id;
+			account_name	player; // 下注人
+			account_name	referral; // 推荐人
+			asset			bet_amt;  // 下注金额
+			uint32_t        offer_type; // 押注点数
+			checksum256		house_seed; // 服务器种子
+			checksum256		house_hash; // 服务器哈希
+			uint8_t 		result;
+			asset			payout;
+	};
+	
 	
 	// 创建游戏
     //@abi action
@@ -132,6 +152,10 @@ class sicbo : public eosio::contract {
 
 		// 计算中奖结果
 		MAP_RESULT result = this->_getWinsMap(num1, num2, num3);
+		
+		
+
+	
 
 		// 修改下注表
 		if(offers.begin()!= offers.end()){
@@ -146,6 +170,30 @@ class sicbo : public eosio::contract {
 					offer_iter++;
 					continue;
 				} 
+				uint64_t ref_reward = 0;
+				uint64_t payout = 0;
+			//	if (offer_iter->referral != REFERRALER){
+				//	ref_reward = offer_iter->bet.amount * REFERRER_REWARD_times10000 / 10000;
+				//}
+	
+				if(result[offer_iter->offer_type]){
+					payout = offer_iter->bet_odds * offer_iter->bet.amount;
+				}
+				
+				if (payout > 0){
+					action(
+						permission_level{_self, N(active)},
+						N(eosio.token), 
+						N(transfer),
+						std::make_tuple(
+							_self, 
+							offer_iter->player, 
+							asset(payout, symbol_type(EOS_SYMBOL)), 
+							std::string("Bet id: ") + std::to_string(offer_iter->id) + std::string(" -- Winner! Play: dice.io, roll type: " + std::to_string(offer_iter->offer_type))
+						)
+					).send();
+				}
+				
 				// 修改赌注结果
 				offers.modify(*offer_iter, 0, [&](auto& offer){
 					if (result[offer_iter->offer_type]) {
@@ -157,6 +205,25 @@ class sicbo : public eosio::contract {
 					}
 					offer.update_time = eosio::time_point_sec(now());
 				});
+				
+				st_result result{.game_id = offer_iter->id,
+								 .player = offer_iter->player,
+								// .referral = offer_iter->referral,
+								 .bet_amt = offer_iter->bet,
+								 .offer_type = offer_iter->offer_type,
+								 .house_seed = source,
+								 .house_hash = game->commitment,
+								 .result = offer_iter->result,
+								 .payout = asset(payout, symbol_type(EOS_SYMBOL))
+					
+				};
+				action(
+					permission_level{_self, N(active)},
+					_self,
+					N(betreceipt),
+					result
+				).send();
+				
 				offer_iter++;
 			}
 		}
@@ -167,6 +234,12 @@ class sicbo : public eosio::contract {
 			game2.game_state = 2;
 			game2.update_time = eosio::time_point_sec(now());
 		});
+	}
+	
+	// @abi action
+	void betreceipt(st_result& result) {
+		require_auth(_self);
+		// require_recipient( bettor );
 	}
     //@abi action
     void balance(const uint64_t gameid, const account_name player){};
@@ -190,72 +263,57 @@ class sicbo : public eosio::contract {
 	//@abi action
     void transfer(account_name from, account_name to, const asset& quantity, const std::string& memo){
 		
-		auto global =  _global.begin();
-		uint64_t gameid = global->nextgameid;
-		auto game =  games.find(gameid);
+		const std::size_t breaks = memo.find("-");
 
-	//	eosio_assert(eosio::time_point_sec(now()) < (game->create_time + game->ttl) ,"The betting has been closed");
-		eosio_assert(0 == game->game_state, "game_state is not valid");
+
+		if(breaks != std::string::npos){
+		
+			auto global =  _global.begin();
+			uint64_t gameid = global->nextgameid;
+			auto game =  games.find(gameid);
+
+		//	eosio_assert(eosio::time_point_sec(now()) < (game->create_time + game->ttl) ,"The betting has been closed");
+			eosio_assert(0 == game->game_state, "game_state is not valid");
 
         	//memo.erase(std::remove_if(memo.begin(), memo.end(), [](unsigned char x) { return std::isspace(x); }), memo.end());
 
         	//size_t sep_count = std::count(memo.begin(), memo.end(), '-');
         	//eosio_assert(sep_count == 3, "invalid memo");
 			
-		uint64_t game_id = _global.begin()->nextgameid;	
+			uint64_t game_id = _global.begin()->nextgameid;	
 			
 			
 
-			std::string roll_1;
-			std::string roll_2;
-			std::string roll_3;
-			std::string roll_4;
-			std::string roll_5;
-			std::string roll_6;
-			std::string roll_7;
-			std::string roll_8;
-			std::string roll_9;
+			std::string roll_1 = "10000";
+
+			
+			account_name referrer = REFERRALER;
 			
 			
-			const std::size_t first_break = memo.find(",");
-			roll_1 = memo.substr(0, first_break);
+			
+			//const std::size_t first_break = memo.find("-");
+			//roll_1 = memo.substr(0, first_break);
 						
-			const std::string after_first_break = memo.substr(first_break + 1);
-			const std::size_t second_break = after_first_break.find(",");
-			roll_2 = after_first_break.substr(0, second_break);
+		//	const std::string after_first_break = memo.substr(first_break + 1);
+		//	const std::size_t second_break = after_first_break.find("-");
 			
-			const std::string after_second_break =  after_first_break.substr(second_break+1);
-			const std::size_t three_break = after_second_break.find(",");
-			roll_3 = after_second_break.substr(0, three_break);
+		//	if(second_break != std::string::npos){
+		//		referrer = eosio::string_to_name(after_first_break.c_str());
+			//}
 			
-			const std::string after_three_break = after_second_break.substr(three_break+1);
-			const std::size_t four_break = after_three_break.find(",");
-			roll_4 = after_three_break.substr(0,four_break);
 			
-			const std::string after_four_break = after_three_break.substr(four_break+1);
-			const std::size_t five_break = after_four_break.find(",");
-			roll_5 = after_four_break.substr(0,five_break);
+		
 			
-			const std::string after_five_break = after_four_break.substr(five_break+1);
-			const std::size_t six_break = after_five_break.find(",");
-			roll_6 = after_five_break.substr(0,six_break);
-						
-			const std::string after_six_break = after_three_break.substr(four_break+1);
-			const std::size_t seven_break = after_six_break.find(",");
-			roll_7 = after_six_break.substr(0,seven_break);
-						
-			const std::string after_seven_break = after_three_break.substr(four_break+1);
-			const std::size_t eight_break = after_seven_break.find(",");
-			roll_8 = after_seven_break.substr(0,eight_break);
 			
-			const std::string after_eight_break = after_three_break.substr(four_break+1);
-			const std::size_t nine_break = after_eight_break.find(",");
-			roll_9 = after_eight_break.substr(0,nine_break);
+			
+			
+
 			
 			if(!roll_1.empty() && stoi(roll_1)>0){
 				offers.emplace(_self, [&](auto& new_offer){
 					new_offer.id =  offers.available_primary_key();
 					new_offer.player = from;
+					new_offer.referral = REFERRALER;
 					new_offer.bet = asset(stoi(roll_1), symbol_type(S(4, EOS)));
 					new_offer.gameid = game_id;
 					new_offer.offer_type = 100;
@@ -264,109 +322,13 @@ class sicbo : public eosio::contract {
 					new_offer.update_time = eosio::time_point_sec(now());
 				});	
 			};
-			if(!roll_2.empty() && stoi(roll_2)>0){
-				offers.emplace(_self, [&](auto& new_offer){
-					new_offer.id =  offers.available_primary_key();
-					new_offer.player = from;
-					new_offer.bet = asset(stoi(roll_2), symbol_type(S(4, EOS)));
-					new_offer.gameid = game_id;
-					new_offer.offer_type = 200;
-					new_offer.bet_odds = 290;
-					new_offer.create_time = eosio::time_point_sec(now());
-					new_offer.update_time = eosio::time_point_sec(now());
-				});	
-			};
-			if(!roll_3.empty() && stoi(roll_3)>0){
-				offers.emplace(_self, [&](auto& new_offer){
-					new_offer.id =  offers.available_primary_key();
-					new_offer.player = from;
-					new_offer.bet = asset(stoi(roll_3), symbol_type(S(4, EOS)));
-					new_offer.gameid = game_id;
-					new_offer.offer_type = 300;
-					new_offer.bet_odds = 290;
-					new_offer.create_time = eosio::time_point_sec(now());
-					new_offer.update_time = eosio::time_point_sec(now());
-				});	
-			};
-			if(!roll_4.empty() && stoi(roll_4)>0){
-				offers.emplace(_self, [&](auto& new_offer){
-					new_offer.id =  offers.available_primary_key();
-					new_offer.player = from;
-					new_offer.bet = asset(stoi(roll_4), symbol_type(S(4, EOS)));
-					new_offer.gameid = game_id;
-					new_offer.offer_type = 120;
-					new_offer.bet_odds = 588;
-					new_offer.create_time = eosio::time_point_sec(now());
-					new_offer.update_time = eosio::time_point_sec(now());
-				});	
-			};
-			if(!roll_5.empty() && stoi(roll_5)>0){
-				offers.emplace(_self, [&](auto& new_offer){
-					new_offer.id =  offers.available_primary_key();
-					new_offer.player = from;
-					new_offer.bet = asset(stoi(roll_5), symbol_type(S(4, EOS)));
-					new_offer.gameid = game_id;
-					new_offer.offer_type = 130;
-					new_offer.bet_odds = 588;
-					new_offer.create_time = eosio::time_point_sec(now());
-					new_offer.update_time = eosio::time_point_sec(now());
-				});	
-			};
-			if(!roll_6.empty() && stoi(roll_6)>0){
-				offers.emplace(_self, [&](auto& new_offer){
-					new_offer.id =  offers.available_primary_key();
-					new_offer.player = from;
-					new_offer.bet = asset(stoi(roll_6), symbol_type(S(4, EOS)));
-					new_offer.gameid = game_id;
-					new_offer.offer_type = 210;
-					new_offer.bet_odds = 588;
-					new_offer.create_time = eosio::time_point_sec(now());
-					new_offer.update_time = eosio::time_point_sec(now());
-				});	
-			};
-			if(!roll_7.empty() && stoi(roll_7)>0){
-				offers.emplace(_self, [&](auto& new_offer){
-					new_offer.id =  offers.available_primary_key();
-					new_offer.player = from;
-					new_offer.bet = asset(stoi(roll_7), symbol_type(S(4, EOS)));
-					new_offer.gameid = game_id;
-					new_offer.offer_type = 230;
-					new_offer.bet_odds = 588;
-					new_offer.create_time = eosio::time_point_sec(now());
-					new_offer.update_time = eosio::time_point_sec(now());
-				});	
-			};
-			if(!roll_8.empty() && stoi(roll_8)>0){
-				offers.emplace(_self, [&](auto& new_offer){
-					new_offer.id =  offers.available_primary_key();
-					new_offer.player = from;
-					new_offer.bet = asset(stoi(roll_8), symbol_type(S(4, EOS)));
-					new_offer.gameid = game_id;
-					new_offer.offer_type = 310;
-					new_offer.bet_odds = 588;
-					new_offer.create_time = eosio::time_point_sec(now());
-					new_offer.update_time = eosio::time_point_sec(now());
-				});	
-			};
-			if(!roll_9.empty() && stoi(roll_9)>0){
-				offers.emplace(_self, [&](auto& new_offer){
-					new_offer.id =  offers.available_primary_key();
-					new_offer.player = from;
-					new_offer.bet = asset(stoi(roll_9), symbol_type(S(4, EOS)));
-					new_offer.gameid = game_id;
-					new_offer.offer_type = 320;
-					new_offer.bet_odds = 588;
-					new_offer.create_time = eosio::time_point_sec(now());
-					new_offer.update_time = eosio::time_point_sec(now());
-				});	
-			};
-			
+
 			
 
 
         	//container = memo.substr(++pos);
         	// eosio_assert(!container.empty(), "no referrer");
-        	//*referrer = eosio::string_to_name(container.c_str());
+		} 	//*referrer = eosio::string_to_name(container.c_str());
 		
 	};//注意没有action
 
@@ -424,10 +386,11 @@ class sicbo : public eosio::contract {
     struct offer {
         uint64_t          id; // 下注id
         account_name      player; // 用户名
+		account_name	  referral;
         asset             bet; // 赌注
         uint64_t          gameid; // 赌局id，如:201809130001
         uint32_t          offer_type; // 下注类型：1:大, 2:小
-        uint32_t           bet_odds ; // 下注赔率，默认：x2
+        uint32_t          bet_odds ; // 下注赔率，默认：x2
         uint8_t result = 0; // 赌注结果：0:未开奖, 1:胜利, 2:失败
         uint8_t tranffer_state = 0; // 转账状态：0:未转账, 1:转账中, 2:转账成功, 3:转账失败
         eosio::time_point_sec create_time; // 创建时间
@@ -436,7 +399,7 @@ class sicbo : public eosio::contract {
         uint64_t primary_key() const { return id; }
         uint64_t by_gameid() const { return gameid; } // 可以通过赌局id查询数据
         account_name by_account_name() const { return player; } // 可以通过用户名查询数据
-        EOSLIB_SERIALIZE( offer, (id)(player)(bet)(gameid)(offer_type)(bet_odds)(result)(tranffer_state)(create_time)(update_time) )
+        EOSLIB_SERIALIZE( offer, (id)(player)(referral)(bet)(gameid)(offer_type)(bet_odds)(result)(tranffer_state)(create_time)(update_time) )
     };
 	
 	// @abi table global i64
@@ -645,4 +608,4 @@ class sicbo : public eosio::contract {
     } \
  }
 
-EOSIO_ABI_EX(sicbo, (creategame)(reveal)(balance)(cleargame)(clearoffer)(closegame)(transfer))
+EOSIO_ABI_EX(sicbo, (creategame)(reveal)(balance)(cleargame)(clearoffer)(betreceipt)(closegame)(transfer))
